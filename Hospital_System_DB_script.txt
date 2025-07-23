@@ -1,0 +1,2505 @@
+-- Database creation script for OGH_HospitalSystem
+-- This script creates all database objects for the hospital management system
+-- Last updated: 2025-07-22
+-- By : Aurora Gonzalez 
+
+-- Create the database
+USE [master]
+GO
+CREATE DATABASE [OGH_HospitalSystem]
+ CONTAINMENT = NONE
+ ON  PRIMARY 
+( NAME = N'OGH_HospitalSystem_data', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL16.MEDICAL_DATA\MSSQL\DATA\OGH_HospitalSystem_data.mdf' , SIZE = 73728KB , MAXSIZE = UNLIMITED, FILEGROWTH = 65536KB )
+ LOG ON 
+( NAME = N'OGH_HospitalSystem_log', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL16.MEDICAL_DATA\MSSQL\DATA\OGH_HospitalSystem_log.ldf' , SIZE = 73728KB , MAXSIZE = 2048GB , FILEGROWTH = 65536KB )
+ WITH CATALOG_COLLATION = DATABASE_DEFAULT, LEDGER = OFF
+GO
+
+-- Set database compatibility level
+ALTER DATABASE [OGH_HospitalSystem] SET COMPATIBILITY_LEVEL = 160
+GO
+
+-- Enable full-text search if installed
+IF (1 = FULLTEXTSERVICEPROPERTY('IsFullTextInstalled'))
+BEGIN
+    EXEC [OGH_HospitalSystem].[dbo].[sp_fulltext_database] @action = 'enable'
+END
+GO
+
+-- Set database options
+ALTER DATABASE [OGH_HospitalSystem] SET ANSI_NULL_DEFAULT OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ANSI_NULLS OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ANSI_PADDING OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ANSI_WARNINGS OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ARITHABORT OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET AUTO_CLOSE OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET AUTO_SHRINK OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET AUTO_UPDATE_STATISTICS ON 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET CURSOR_CLOSE_ON_COMMIT OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET CURSOR_DEFAULT GLOBAL 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET CONCAT_NULL_YIELDS_NULL OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET NUMERIC_ROUNDABORT OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET QUOTED_IDENTIFIER OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET RECURSIVE_TRIGGERS OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET DISABLE_BROKER 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET AUTO_UPDATE_STATISTICS_ASYNC OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET DATE_CORRELATION_OPTIMIZATION OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET TRUSTWORTHY OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ALLOW_SNAPSHOT_ISOLATION OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET PARAMETERIZATION SIMPLE 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET READ_COMMITTED_SNAPSHOT OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET HONOR_BROKER_PRIORITY OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET RECOVERY FULL 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET MULTI_USER 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET PAGE_VERIFY CHECKSUM  
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET DB_CHAINING OFF 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET FILESTREAM( NON_TRANSACTED_ACCESS = OFF ) 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET TARGET_RECOVERY_TIME = 60 SECONDS 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET DELAYED_DURABILITY = DISABLED 
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET ACCELERATED_DATABASE_RECOVERY = OFF  
+GO
+
+-- Enable vardecimal storage format
+EXEC sys.sp_db_vardecimal_storage_format N'OGH_HospitalSystem', N'ON'
+GO
+
+-- Configure Query Store
+ALTER DATABASE [OGH_HospitalSystem] SET QUERY_STORE = ON
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET QUERY_STORE (OPERATION_MODE = READ_WRITE, 
+    CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30), 
+    DATA_FLUSH_INTERVAL_SECONDS = 900, 
+    INTERVAL_LENGTH_MINUTES = 60, 
+    MAX_STORAGE_SIZE_MB = 1000, 
+    QUERY_CAPTURE_MODE = AUTO, 
+    SIZE_BASED_CLEANUP_MODE = AUTO, 
+    MAX_PLANS_PER_QUERY = 200, 
+    WAIT_STATS_CAPTURE_MODE = ON)
+GO
+
+-- Use the database
+USE [OGH_HospitalSystem]
+GO
+
+-- =============================================
+-- Create utility functions
+-- =============================================
+
+-- Function to get current user ID
+CREATE FUNCTION [dbo].[GetCurrentUserId]()
+RETURNS INT
+AS
+BEGIN
+    -- This would be replaced with your actual user context logic
+    -- For now returns 1 (admin) as a placeholder
+    RETURN 1
+END
+GO
+
+-- =============================================
+-- Create tables
+-- =============================================
+
+-- RecordStatus table (created first as it's referenced by many other tables)
+CREATE TABLE [dbo].[RecordStatus](
+    [status_id] [int] IDENTITY(1,1) NOT NULL,
+    [status_name] [varchar](50) NOT NULL,
+    [description] [varchar](255) NULL,
+    [is_active] [bit] NOT NULL DEFAULT (1),
+    [created_at] [datetime2](7) NOT NULL DEFAULT (sysdatetime()),
+    [created_by] [int] NULL,
+ CONSTRAINT [PK_RecordStatus] PRIMARY KEY CLUSTERED ([status_id] ASC),
+ CONSTRAINT [UQ_RecordStatus_Name] UNIQUE NONCLUSTERED ([status_name] ASC)
+GO
+
+-- System_Users table
+CREATE TABLE [dbo].[System_Users](
+    [user_id] [int] IDENTITY(1,1) NOT NULL,
+    [username] [varchar](50) NOT NULL,
+    [password_hash] [varbinary](max) NOT NULL,
+    [role] [varchar](30) NOT NULL,
+    [email] [varchar](100) NULL,
+    [created_at] [datetime2](7) NULL DEFAULT (sysdatetime()),
+    [is_active] [bit] NULL DEFAULT (1),
+    [access_level_id] [int] NULL,
+PRIMARY KEY CLUSTERED ([user_id] ASC),
+UNIQUE NONCLUSTERED ([username] ASC)
+GO
+
+-- AccessLevels table
+CREATE TABLE [dbo].[AccessLevels](
+    [access_level_id] [int] IDENTITY(1,1) NOT NULL,
+    [level_name] [varchar](50) NOT NULL,
+    [description] [varchar](255) NULL,
+    [can_view_patient_data] [bit] NOT NULL DEFAULT (0),
+    [can_edit_patient_data] [bit] NOT NULL DEFAULT (0),
+    [can_manage_users] [bit] NOT NULL DEFAULT (0),
+    [can_manage_system] [bit] NOT NULL DEFAULT (0),
+    [can_generate_reports] [bit] NOT NULL DEFAULT (0),
+    [is_active] [bit] NOT NULL DEFAULT (1),
+    [created_at] [datetime2](7) NOT NULL DEFAULT (sysdatetime()),
+    [created_by] [int] NULL,
+ CONSTRAINT [PK_AccessLevels] PRIMARY KEY CLUSTERED ([access_level_id] ASC),
+ CONSTRAINT [UQ_AccessLevels_Name] UNIQUE NONCLUSTERED ([level_name] ASC))
+GO
+
+-- Add foreign key to System_Users
+ALTER TABLE [dbo].[System_Users] WITH NOCHECK 
+ADD CONSTRAINT [FK_SystemUsers_AccessLevels] FOREIGN KEY([access_level_id])
+REFERENCES [dbo].[AccessLevels] ([access_level_id])
+GO
+
+-- Patients table
+CREATE TABLE [dbo].[Patients](
+    [patient_id] [int] IDENTITY(1,1) NOT NULL,
+    [first_name] [varchar](50) NOT NULL,
+    [last_name] [varchar](50) NOT NULL,
+    [dob] [date] NOT NULL,
+    [gender] [char](1) NULL,
+    [ssn] [varbinary](256) NULL,
+    [phone] [varchar](20) NULL,
+    [email] [varchar](100) NULL,
+    [address] [varchar](255) NULL,
+    [emergency_contact_name] [varchar](100) NULL,
+    [emergency_contact_phone] [varchar](20) NULL,
+    [created_at] [datetime2](7) NULL DEFAULT (sysdatetime()),
+    [ExternalPatientID] [varchar](50) NULL,
+    [StatusID] [int] NULL DEFAULT (1),
+    [CreatedBy] [int] NULL DEFAULT ([dbo].[GetCurrentUserId]()),
+    [UpdatedAt] [datetime2](7) NULL,
+    [UpdatedBy] [int] NULL,
+    [Synced] [bit] NULL DEFAULT (0),
+    [SyncDate] [datetime2](7) NULL,
+    [CreatedAt] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED ([patient_id] ASC))
+GO
+
+-- Add constraints to Patients table
+ALTER TABLE [dbo].[Patients] WITH CHECK 
+ADD CONSTRAINT [CHK_Patients_Gender] CHECK (([gender]='O' OR [gender]='F' OR [gender]='M'))
+GO
+
+ALTER TABLE [dbo].[Patients] WITH CHECK 
+ADD CONSTRAINT [FK_Patients_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+
+ALTER TABLE [dbo].[Patients] WITH CHECK 
+ADD CONSTRAINT [FK_Patients_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+
+ALTER TABLE [dbo].[Patients] WITH CHECK 
+ADD CONSTRAINT [FK_Patients_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+
+-- Doctors table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Doctors](
+	[doctor_id] [int] IDENTITY(1,1) NOT NULL,
+	[user_id] [int] NOT NULL,
+	[first_name] [varchar](50) NOT NULL,
+	[last_name] [varchar](50) NOT NULL,
+	[specialty_id] [int] NULL,
+	[license_number] [varchar](30) NOT NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[StatusID] [int] NULL,
+	[CreatedAt] [datetime2](7) NULL,
+	[CreatedBy] [int] NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+	[UpdatedBy] [int] NULL,
+	[Synced] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[doctor_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[user_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[license_number] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+-- Appointments table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Appointments](
+	[appointment_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[appointment_type_id] [int] NULL,
+	[appointment_date] [date] NOT NULL,
+	[start_time] [time](7) NOT NULL,
+	[end_time] [time](7) NOT NULL,
+	[status] [varchar](20) NULL,
+	[notes] [text] NULL,
+	[StatusID] [int] NULL,
+	[CreatedAt] [datetime2](7) NULL,
+	[CreatedBy] [int] NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+	[UpdatedBy] [int] NULL,
+	[Synced] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[appointment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  View [dbo].[vw_AppointmentSummary]    Script Date: 2025-07-22 9:49:52 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE VIEW [dbo].[vw_AppointmentSummary] AS
+SELECT 
+    a.appointment_id,
+    p.patient_id,
+    CONCAT(p.first_name, ' ', p.last_name) AS PatientFullName,
+    d.doctor_id,
+    CONCAT(d.first_name, ' ', d.last_name) AS DoctorFullName,
+    a.appointment_date,
+    a.Status,
+    dep.name,
+    a.notes
+FROM Appointments a
+INNER JOIN Patients p ON a.patient_id = p.patient_id
+INNER JOIN Doctors d ON a.doctor_id = d.doctor_id
+LEFT JOIN Appointment_Types dep ON a.appointment_type_id = dep.appointment_type_id;
+GO
+
+--Medical_History
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medical_History](
+	[history_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[condition_name] [varchar](100) NOT NULL,
+	[diagnosis_date] [date] NULL,
+	[status] [varchar](50) NULL,
+	[notes] [text] NULL,
+	[recorded_by] [int] NULL,
+	[created_at] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[history_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Diagnoses Table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Diagnoses](
+	[diagnosis_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[diagnosis_date] [date] NOT NULL,
+	[icd_code] [varchar](10) NULL,
+	[description] [text] NULL,
+	[is_primary] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[diagnosis_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Clinical_Notes
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Clinical_Notes](
+	[note_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[note_date] [datetime2](7) NULL,
+	[note_type] [varchar](50) NULL,
+	[content] [text] NULL,
+	[is_sensitive] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[note_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--  __EFMigrationsHistory table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[__EFMigrationsHistory](
+	[MigrationId] [nvarchar](150) NOT NULL,
+	[ProductVersion] [nvarchar](32) NOT NULL,
+ CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY CLUSTERED 
+(
+	[MigrationId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[AccessLevels]    Script Date: 2025-07-22 9:49:52 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[AccessLevels](
+	[access_level_id] [int] IDENTITY(1,1) NOT NULL,
+	[level_name] [varchar](50) NOT NULL,
+	[description] [varchar](255) NULL,
+	[can_view_patient_data] [bit] NOT NULL,
+	[can_edit_patient_data] [bit] NOT NULL,
+	[can_manage_users] [bit] NOT NULL,
+	[can_manage_system] [bit] NOT NULL,
+	[can_generate_reports] [bit] NOT NULL,
+	[is_active] [bit] NOT NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+ CONSTRAINT [PK_AccessLevels] PRIMARY KEY CLUSTERED 
+(
+	[access_level_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_AccessLevels_Name] UNIQUE NONCLUSTERED 
+(
+	[level_name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Admin_Staff table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Admin_Staff](
+	[staff_id] [int] IDENTITY(1,1) NOT NULL,
+	[user_id] [int] NOT NULL,
+	[first_name] [varchar](50) NOT NULL,
+	[last_name] [varchar](50) NOT NULL,
+	[department] [varchar](100) NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[position] [varchar](100) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[staff_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[user_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Allergies table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Allergies](
+	[allergy_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[substance] [varchar](100) NULL,
+	[reaction] [varchar](100) NULL,
+	[severity] [varchar](20) NULL,
+	[recorded_by] [int] NULL,
+	[recorded_at] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[allergy_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Appointment_Cancellations table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Appointment_Cancellations](
+	[cancellation_id] [int] IDENTITY(1,1) NOT NULL,
+	[appointment_id] [int] NULL,
+	[cancellation_date] [datetime2](7) NULL,
+	[reason] [text] NULL,
+	[canceled_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[cancellation_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Bed_Assignments table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Bed_Assignments](
+	[assignment_id] [int] IDENTITY(1,1) NOT NULL,
+	[hospitalization_id] [int] NULL,
+	[bed_id] [int] NULL,
+	[assigned_at] [datetime2](7) NULL,
+	[released_at] [datetime2](7) NULL,
+	[assigned_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[assignment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Beds table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Beds](
+	[bed_id] [int] IDENTITY(1,1) NOT NULL,
+	[ward_id] [int] NULL,
+	[bed_number] [varchar](10) NOT NULL,
+	[bed_type] [varchar](50) NULL,
+	[is_available] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[bed_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [uc_ward_bed] UNIQUE NONCLUSTERED 
+(
+	[ward_id] ASC,
+	[bed_number] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Change_Log table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Change_Log](
+	[change_id] [int] IDENTITY(1,1) NOT NULL,
+	[table_name] [varchar](100) NOT NULL,
+	[record_id] [int] NOT NULL,
+	[changed_by] [int] NULL,
+	[change_type] [varchar](50) NULL,
+	[change_date] [datetime2](7) NULL,
+	[old_value] [nvarchar](max) NULL,
+	[new_value] [nvarchar](max) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[change_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Clinical_Audits table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Clinical_Audits](
+	[audit_id] [int] IDENTITY(1,1) NOT NULL,
+	[audit_date] [datetime2](7) NOT NULL,
+	[auditor] [int] NULL,
+	[audit_scope] [text] NULL,
+	[findings] [text] NULL,
+	[recommendations] [text] NULL,
+	[status] [varchar](20) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[audit_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Clinical_Events table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Clinical_Events](
+	[event_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[event_date] [datetime2](7) NOT NULL,
+	[event_type] [varchar](100) NULL,
+	[description] [text] NULL,
+	[recorded_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[event_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Coverage_Details table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Coverage_Details](
+	[coverage_id] [int] IDENTITY(1,1) NOT NULL,
+	[plan_id] [int] NULL,
+	[service_type] [varchar](100) NULL,
+	[coverage_percentage] [decimal](5, 2) NULL,
+	[notes] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[coverage_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Departments table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Departments](
+	[department_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[description] [text] NULL,
+	[head_of_department] [int] NULL,
+	[is_active] [bit] NULL,
+	[floor] [int] NULL,
+	[phone_extension] [varchar](50) NULL,
+	[type_id] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[department_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--DepartmentTypes table
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DepartmentTypes](
+	[type_id] [int] IDENTITY(1,1) NOT NULL,
+	[type_name] [varchar](100) NOT NULL,
+	[description] [varchar](255) NULL,
+	[is_clinical] [bit] NOT NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+ CONSTRAINT [PK_DepartmentTypes] PRIMARY KEY CLUSTERED 
+(
+	[type_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_DepartmentTypes_Name] UNIQUE NONCLUSTERED 
+(
+	[type_name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+--Discharges table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Discharges](
+	[discharge_id] [int] IDENTITY(1,1) NOT NULL,
+	[hospitalization_id] [int] NULL,
+	[discharge_date] [datetime2](7) NOT NULL,
+	[discharge_summary] [text] NULL,
+	[discharged_by] [int] NULL,
+	[outcome] [varchar](50) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[discharge_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Doctor_Schedules table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Doctor_Schedules](
+	[schedule_id] [int] IDENTITY(1,1) NOT NULL,
+	[doctor_id] [int] NULL,
+	[available_date] [date] NOT NULL,
+	[start_time] [time](7) NOT NULL,
+	[end_time] [time](7) NOT NULL,
+	[location] [varchar](100) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[schedule_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [uc_doctor_availability] UNIQUE NONCLUSTERED 
+(
+	[doctor_id] ASC,
+	[available_date] ASC,
+	[start_time] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--DoctorDepartmentAssignments bridge table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DoctorDepartmentAssignments](
+	[assignment_id] [int] IDENTITY(1,1) NOT NULL,
+	[doctor_id] [int] NOT NULL,
+	[department_id] [int] NOT NULL,
+	[is_primary] [bit] NOT NULL,
+	[start_date] [date] NOT NULL,
+	[end_date] [date] NULL,
+	[role] [varchar](100) NULL,
+	[status_id] [int] NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+	[updated_at] [datetime2](7) NULL,
+	[updated_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[assignment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_DoctorDepartment] UNIQUE NONCLUSTERED 
+(
+	[doctor_id] ASC,
+	[department_id] ASC,
+	[start_date] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--DoctorPatientAssignments bridge table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DoctorPatientAssignments](
+	[assignment_id] [int] IDENTITY(1,1) NOT NULL,
+	[doctor_id] [int] NOT NULL,
+	[patient_id] [int] NOT NULL,
+	[is_primary] [bit] NOT NULL,
+	[start_date] [date] NOT NULL,
+	[end_date] [date] NULL,
+	[assignment_reason] [varchar](255) NULL,
+	[status_id] [int] NULL,
+	[created_at] [datetime2](7) NULL,
+	[created_by] [int] NULL,
+	[updated_at] [datetime2](7) NULL,
+	[updated_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[assignment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_DoctorPatient] UNIQUE NONCLUSTERED 
+(
+	[doctor_id] ASC,
+	[patient_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--DoctorSpecialties table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DoctorSpecialties](
+	[doctor_specialty_id] [int] IDENTITY(1,1) NOT NULL,
+	[doctor_id] [int] NOT NULL,
+	[specialty_id] [int] NOT NULL,
+	[is_primary] [bit] NOT NULL,
+	[certification_date] [date] NULL,
+	[certified_by] [varchar](100) NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[doctor_specialty_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_DoctorSpecialty] UNIQUE NONCLUSTERED 
+(
+	[doctor_id] ASC,
+	[specialty_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Equipment_Maintenance table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Equipment_Maintenance](
+	[maintenance_id] [int] IDENTITY(1,1) NOT NULL,
+	[equipment_id] [int] NULL,
+	[maintenance_date] [datetime2](7) NOT NULL,
+	[performed_by] [varchar](100) NULL,
+	[maintenance_type] [varchar](50) NULL,
+	[notes] [text] NULL,
+	[next_maintenance_date] [date] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[maintenance_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--EquipmentMaintenanceSchedule table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[EquipmentMaintenanceSchedule](
+	[schedule_id] [int] IDENTITY(1,1) NOT NULL,
+	[equipment_id] [int] NOT NULL,
+	[maintenance_type_id] [int] NOT NULL,
+	[schedule_date] [date] NOT NULL,
+	[completed_date] [date] NULL,
+	[status] [varchar](20) NOT NULL,
+	[assigned_to] [int] NULL,
+	[estimated_duration] [int] NULL,
+	[actual_duration] [int] NULL,
+	[notes] [text] NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[schedule_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Family_History table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Family_History](
+	[family_history_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[relation] [varchar](50) NULL,
+	[condition] [varchar](100) NULL,
+	[age_of_onset] [int] NULL,
+	[notes] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[family_history_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Hospitalizations table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Hospitalizations](
+	[hospitalization_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[admission_date] [datetime2](7) NOT NULL,
+	[expected_discharge_date] [date] NULL,
+	[reason_for_admission] [text] NULL,
+	[admitting_doctor_id] [int] NULL,
+	[ward_id] [int] NULL,
+	[status] [varchar](20) NULL,
+	[ExternalAdmissionID] [varchar](50) NULL,
+	[StatusID] [int] NULL,
+	[CreatedAt] [datetime2](7) NULL,
+	[CreatedBy] [int] NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+	[UpdatedBy] [int] NULL,
+	[Synced] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[hospitalization_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Imaging_Orders table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Imaging_Orders](
+	[imaging_order_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[modality] [varchar](50) NULL,
+	[body_part] [varchar](100) NULL,
+	[order_date] [datetime2](7) NULL,
+	[status] [varchar](20) NULL,
+	[clinical_indication] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[imaging_order_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Imaging_Results table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Imaging_Results](
+	[imaging_result_id] [int] IDENTITY(1,1) NOT NULL,
+	[imaging_order_id] [int] NULL,
+	[findings] [text] NULL,
+	[impression] [text] NULL,
+	[result_date] [datetime2](7) NULL,
+	[radiologist_id] [int] NULL,
+	[image_path] [varchar](255) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[imaging_result_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Incident_Reports table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Incident_Reports](
+	[incident_id] [int] IDENTITY(1,1) NOT NULL,
+	[reported_by] [int] NULL,
+	[incident_date] [datetime2](7) NOT NULL,
+	[location] [varchar](255) NULL,
+	[description] [text] NOT NULL,
+	[severity] [varchar](50) NULL,
+	[status] [varchar](20) NULL,
+	[resolution] [text] NULL,
+	[resolved_by] [int] NULL,
+	[resolved_date] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[incident_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Informed_Consents table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Informed_Consents](
+	[consent_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[consent_date] [datetime2](7) NOT NULL,
+	[consent_type] [varchar](100) NULL,
+	[description] [text] NULL,
+	[signed_by] [int] NULL,
+	[witness_name] [varchar](100) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[consent_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Insurance_Plans table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Insurance_Plans](
+	[plan_id] [int] IDENTITY(1,1) NOT NULL,
+	[provider_id] [int] NULL,
+	[plan_name] [varchar](100) NOT NULL,
+	[coverage_type] [varchar](50) NULL,
+	[plan_details] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[plan_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Insurance_Providers table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Insurance_Providers](
+	[provider_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[contact_name] [varchar](100) NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[address] [varchar](255) NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[provider_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Invoice_Lines table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Invoice_Lines](
+	[invoice_line_id] [int] IDENTITY(1,1) NOT NULL,
+	[invoice_id] [int] NULL,
+	[service_description] [varchar](255) NULL,
+	[service_type] [varchar](50) NULL,
+	[unit_price] [decimal](10, 2) NULL,
+	[quantity] [int] NULL,
+	[line_total]  AS ([unit_price]*[quantity]) PERSISTED,
+PRIMARY KEY CLUSTERED 
+(
+	[invoice_line_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+-- Invoices table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Invoices](
+	[invoice_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[invoice_date] [datetime2](7) NULL,
+	[total_amount] [decimal](10, 2) NOT NULL,
+	[insurance_plan_id] [int] NULL,
+	[status] [varchar](20) NULL,
+	[due_date] [date] NULL,
+	[ExternalInvoiceID] [varchar](50) NULL,
+	[StatusID] [int] NULL,
+	[CreatedAt] [datetime2](7) NULL,
+	[CreatedBy] [int] NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+	[UpdatedBy] [int] NULL,
+	[Synced] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[invoice_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Lab_Orders table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Lab_Orders](
+	[lab_order_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[order_date] [datetime2](7) NULL,
+	[status] [varchar](20) NULL,
+	[notes] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[lab_order_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Lab_Results table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Lab_Results](
+	[lab_result_id] [int] IDENTITY(1,1) NOT NULL,
+	[lab_order_id] [int] NULL,
+	[test_name] [varchar](100) NULL,
+	[result_value] [varchar](100) NULL,
+	[units] [varchar](50) NULL,
+	[reference_range] [varchar](50) NULL,
+	[result_date] [datetime2](7) NULL,
+	[result_interpretation] [varchar](100) NULL,
+	[reviewed_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[lab_result_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Medical_Equipment table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medical_Equipment](
+	[equipment_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[serial_number] [varchar](100) NULL,
+	[department_id] [int] NULL,
+	[purchase_date] [date] NULL,
+	[warranty_expiry] [date] NULL,
+	[status] [varchar](50) NULL,
+	[location] [varchar](100) NULL,
+	[model] [varchar](100) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[equipment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[serial_number] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Medical_Specialties table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medical_Specialties](
+	[specialty_id] [int] IDENTITY(1,1) NOT NULL,
+	[specialty_name] [varchar](100) NOT NULL,
+	[description] [text] NULL,
+	[created_at] [datetime2](7) NULL,
+	[created_by] [int] NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[specialty_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Medication_Administration table
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medication_Administration](
+	[administration_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[medication_id] [int] NULL,
+	[nurse_id] [int] NULL,
+	[administered_at] [datetime2](7) NULL,
+	[dose_given] [varchar](50) NULL,
+	[route] [varchar](50) NULL,
+	[notes] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[administration_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+
+--Medication_Inventory table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medication_Inventory](
+	[inventory_id] [int] IDENTITY(1,1) NOT NULL,
+	[medication_id] [int] NULL,
+	[batch_number] [varchar](50) NULL,
+	[expiry_date] [date] NULL,
+	[quantity_available] [int] NULL,
+	[unit_cost] [decimal](10, 2) NULL,
+	[storage_location] [varchar](100) NULL,
+	[received_date] [date] NULL,
+	[supplier_id] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[inventory_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Medications table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Medications](
+	[medication_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[dosage_form] [varchar](50) NULL,
+	[strength] [varchar](50) NULL,
+	[route] [varchar](50) NULL,
+	[is_controlled_substance] [bit] NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[medication_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--MedicationTreatments table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[MedicationTreatments](
+	[treatment_id] [int] IDENTITY(1,1) NOT NULL,
+	[medication_id] [int] NOT NULL,
+	[diagnosis_id] [int] NOT NULL,
+	[prescription_id] [int] NULL,
+	[effectiveness_rating] [tinyint] NULL,
+	[side_effects] [text] NULL,
+	[start_date] [date] NOT NULL,
+	[end_date] [date] NULL,
+	[status_id] [int] NULL,
+	[created_at] [datetime2](7) NULL,
+	[created_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[treatment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Nurses table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Nurses](
+	[nurse_id] [int] IDENTITY(1,1) NOT NULL,
+	[user_id] [int] NOT NULL,
+	[first_name] [varchar](50) NOT NULL,
+	[last_name] [varchar](50) NOT NULL,
+	[license_number] [varchar](30) NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[shift] [varchar](50) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[nurse_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[user_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[license_number] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Patient_Transfers table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Patient_Transfers](
+	[transfer_id] [int] IDENTITY(1,1) NOT NULL,
+	[hospitalization_id] [int] NULL,
+	[from_ward_id] [int] NULL,
+	[to_ward_id] [int] NULL,
+	[transfer_date] [datetime2](7) NULL,
+	[reason] [text] NULL,
+	[approved_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[transfer_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--PatientAllergySeverity bridge  table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PatientAllergySeverity](
+	[severity_id] [int] IDENTITY(1,1) NOT NULL,
+	[allergy_id] [int] NOT NULL,
+	[patient_id] [int] NOT NULL,
+	[severity_level] [varchar](50) NOT NULL,
+	[reaction_description] [text] NULL,
+	[first_observed] [date] NULL,
+	[last_observed] [date] NULL,
+	[is_active] [bit] NOT NULL,
+	[verified_by] [int] NULL,
+	[verified_date] [datetime2](7) NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[severity_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_PatientAllergy] UNIQUE NONCLUSTERED 
+(
+	[allergy_id] ASC,
+	[patient_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+
+--PatientInsurance table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[PatientInsurance](
+	[patient_insurance_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NOT NULL,
+	[plan_id] [int] NOT NULL,
+	[policy_number] [varchar](50) NOT NULL,
+	[is_primary] [bit] NOT NULL,
+	[effective_date] [date] NOT NULL,
+	[expiration_date] [date] NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[patient_insurance_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_PatientInsurance] UNIQUE NONCLUSTERED 
+(
+	[patient_id] ASC,
+	[plan_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Payments table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Payments](
+	[payment_id] [int] IDENTITY(1,1) NOT NULL,
+	[invoice_id] [int] NULL,
+	[payment_date] [datetime2](7) NULL,
+	[payment_method] [varchar](50) NULL,
+	[amount_paid] [decimal](10, 2) NULL,
+	[received_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[payment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Pharmacy_Suppliers table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Pharmacy_Suppliers](
+	[supplier_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[contact_name] [varchar](100) NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[address] [varchar](255) NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[supplier_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+--Prescriptions table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Prescriptions](
+	[prescription_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[doctor_id] [int] NULL,
+	[medication_name] [varchar](100) NULL,
+	[dosage] [varchar](50) NULL,
+	[frequency] [varchar](50) NULL,
+	[duration_days] [int] NULL,
+	[start_date] [date] NULL,
+	[end_date] [date] NULL,
+	[notes] [text] NULL,
+	[medication_id] [int] NULL,
+	[ExternalPrescriptionID] [varchar](50) NULL,
+	[StatusID] [int] NULL,
+	[CreatedAt] [datetime2](7) NULL,
+	[CreatedBy] [int] NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+	[UpdatedBy] [int] NULL,
+	[Synced] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[prescription_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Purchases table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Purchases](
+	[purchase_id] [int] IDENTITY(1,1) NOT NULL,
+	[supplier_id] [int] NULL,
+	[equipment_id] [int] NULL,
+	[purchase_date] [date] NOT NULL,
+	[cost] [decimal](12, 2) NULL,
+	[invoice_number] [varchar](50) NULL,
+	[received_by] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[purchase_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--RecordStatus table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[RecordStatus](
+	[status_id] [int] IDENTITY(1,1) NOT NULL,
+	[status_name] [varchar](50) NOT NULL,
+	[description] [varchar](255) NULL,
+	[is_active] [bit] NOT NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+ CONSTRAINT [PK_RecordStatus] PRIMARY KEY CLUSTERED 
+(
+	[status_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_RecordStatus_Name] UNIQUE NONCLUSTERED 
+(
+	[status_name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+--ShiftAssignments table 
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[ShiftAssignments](
+	[assignment_id] [int] IDENTITY(1,1) NOT NULL,
+	[staff_user_id] [int] NOT NULL,
+	[shift_id] [int] NOT NULL,
+	[assignment_date] [date] NOT NULL,
+	[is_approved] [bit] NOT NULL,
+	[approved_by] [int] NULL,
+	[approved_at] [datetime2](7) NULL,
+	[notes] [varchar](255) NULL,
+	[created_at] [datetime2](7) NOT NULL,
+	[created_by] [int] NULL,
+ CONSTRAINT [PK_ShiftAssignments] PRIMARY KEY CLUSTERED 
+(
+	[assignment_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_ShiftAssignment] UNIQUE NONCLUSTERED 
+(
+	[staff_user_id] ASC,
+	[shift_id] ASC,
+	[assignment_date] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+
+--Shifts
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Shifts](
+	[shift_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](50) NOT NULL,
+	[start_time] [time](7) NOT NULL,
+	[end_time] [time](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[shift_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Suppliers table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Suppliers](
+	[supplier_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[contact_name] [varchar](100) NULL,
+	[phone] [varchar](20) NULL,
+	[email] [varchar](100) NULL,
+	[address] [varchar](255) NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[supplier_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Vaccinations table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Vaccinations](
+	[vaccination_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[vaccine_name] [varchar](100) NULL,
+	[vaccination_date] [date] NULL,
+	[administered_by] [int] NULL,
+	[notes] [text] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[vaccination_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+--Vital_Signs table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Vital_Signs](
+	[vital_id] [int] IDENTITY(1,1) NOT NULL,
+	[patient_id] [int] NULL,
+	[recorded_by] [int] NULL,
+	[record_time] [datetime2](7) NULL,
+	[temperature] [decimal](4, 2) NULL,
+	[blood_pressure] [varchar](15) NULL,
+	[heart_rate] [int] NULL,
+	[respiratory_rate] [int] NULL,
+	[oxygen_saturation] [decimal](5, 2) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[vital_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Wards table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Wards](
+	[ward_id] [int] IDENTITY(1,1) NOT NULL,
+	[name] [varchar](100) NOT NULL,
+	[department] [varchar](100) NULL,
+	[floor] [int] NULL,
+	[capacity] [int] NULL,
+	[is_active] [bit] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[ward_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[name] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--Work_Schedules table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Work_Schedules](
+	[schedule_id] [int] IDENTITY(1,1) NOT NULL,
+	[staff_user_id] [int] NOT NULL,
+	[shift_id] [int] NOT NULL,
+	[work_date] [date] NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[schedule_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [uc_work] UNIQUE NONCLUSTERED 
+(
+	[staff_user_id] ASC,
+	[work_date] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+--
+
+-- =============================================
+-- Create views
+-- =============================================
+
+-- View for appointment summary
+CREATE VIEW [dbo].[vw_AppointmentSummary] AS
+SELECT 
+    a.appointment_id,
+    p.patient_id,
+    CONCAT(p.first_name, ' ', p.last_name) AS PatientFullName,
+    d.doctor_id,
+    CONCAT(d.first_name, ' ', d.last_name) AS DoctorFullName,
+    a.appointment_date,
+    a.Status,
+    dep.name,
+    a.notes
+FROM Appointments a
+INNER JOIN Patients p ON a.patient_id = p.patient_id
+INNER JOIN Doctors d ON a.doctor_id = d.doctor_id
+LEFT JOIN Appointment_Types dep ON a.appointment_type_id = dep.appointment_type_id;
+GO
+
+-- View for doctor-only medical records
+CREATE VIEW [dbo].[vw_MedicalRecords_DoctorOnly]
+WITH SCHEMABINDING
+AS
+SELECT 
+    p.patient_id,
+    p.first_name,
+    p.last_name,
+    p.dob,
+    p.gender,
+    mh.condition_name,
+    mh.diagnosis_date AS condition_diagnosis_date,
+    mh.status AS condition_status,
+    d.diagnosis_id,
+    d.icd_code,
+    d.description AS diagnosis_description,
+    d.diagnosis_date,
+    a.appointment_id,
+    a.appointment_date,
+    a.start_time,
+    a.end_time,
+    a.status AS appointment_status,
+    cn.note_id,
+    cn.note_date,
+    cn.note_type,
+    cn.content AS clinical_note
+FROM dbo.Patients p
+INNER JOIN dbo.Medical_History mh ON p.patient_id = mh.patient_id
+LEFT JOIN dbo.Diagnoses d ON p.patient_id = d.patient_id
+LEFT JOIN dbo.Appointments a ON p.patient_id = a.patient_id
+LEFT JOIN dbo.Clinical_Notes cn ON p.patient_id = cn.patient_id
+WHERE EXISTS (
+    -- Only show patients assigned to the current doctor
+    SELECT 1 FROM dbo.Doctors doc
+    INNER JOIN dbo.System_Users su ON doc.user_id = su.user_id
+    WHERE (d.doctor_id = doc.doctor_id OR 
+           a.doctor_id = doc.doctor_id OR 
+           cn.doctor_id = doc.doctor_id)
+    AND su.username = USER_NAME()
+)
+GO
+
+
+--View for Medical Record  per Doctor 
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE VIEW [dbo].[vw_MedicalRecords_DoctorOnly]
+WITH SCHEMABINDING
+AS
+SELECT 
+    p.patient_id,
+    p.first_name,
+    p.last_name,
+    p.dob,
+    p.gender,
+    mh.condition_name,
+    mh.diagnosis_date AS condition_diagnosis_date,
+    mh.status AS condition_status,
+    d.diagnosis_id,
+    d.icd_code,
+    d.description AS diagnosis_description,
+    d.diagnosis_date,
+    a.appointment_id,
+    a.appointment_date,
+    a.start_time,
+    a.end_time,
+    a.status AS appointment_status,
+    cn.note_id,
+    cn.note_date,
+    cn.note_type,
+    cn.content AS clinical_note
+FROM dbo.Patients p
+INNER JOIN dbo.Medical_History mh ON p.patient_id = mh.patient_id
+LEFT JOIN dbo.Diagnoses d ON p.patient_id = d.patient_id
+LEFT JOIN dbo.Appointments a ON p.patient_id = a.patient_id
+LEFT JOIN dbo.Clinical_Notes cn ON p.patient_id = cn.patient_id
+WHERE EXISTS (
+    -- Only show patients assigned to the current doctor
+    SELECT 1 FROM dbo.Doctors doc
+    INNER JOIN dbo.System_Users su ON doc.user_id = su.user_id
+    WHERE (d.doctor_id = doc.doctor_id OR 
+           a.doctor_id = doc.doctor_id OR 
+           cn.doctor_id = doc.doctor_id)
+    AND su.username = USER_NAME()
+)
+GO
+
+--
+-- =============================================
+-- Create indexes
+-- =============================================
+
+-- Index for doctor department assignments
+CREATE NONCLUSTERED INDEX [IX_DoctorDepartmentAssignments_Department] 
+ON [dbo].[DoctorDepartmentAssignments] ([department_id] ASC)
+GO
+
+-- Filtered index for completed maintenance
+CREATE NONCLUSTERED INDEX [IX_EquipmentMaintenanceSchedule_History] 
+ON [dbo].[EquipmentMaintenanceSchedule] ([equipment_id] ASC, [completed_date] ASC)
+WHERE ([status]='Completed')
+GO
+
+-- Filtered index for scheduled maintenance
+CREATE NONCLUSTERED INDEX [IX_EquipmentMaintenanceSchedule_Upcoming] 
+ON [dbo].[EquipmentMaintenanceSchedule] ([equipment_id] ASC, [schedule_date] ASC)
+WHERE ([status]='Scheduled')
+GO
+
+-- Index for patient allergy severity
+CREATE NONCLUSTERED INDEX [IX_PatientAllergySeverity_Patient] 
+ON [dbo].[PatientAllergySeverity] ([patient_id] ASC)
+GO
+
+--==================================================
+-- Create Constraints
+--==================================================
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((0)) FOR [can_view_patient_data]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((0)) FOR [can_edit_patient_data]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((0)) FOR [can_manage_users]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((0)) FOR [can_manage_system]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((0)) FOR [can_generate_reports]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[AccessLevels] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Allergies] ADD  DEFAULT (sysdatetime()) FOR [recorded_at]
+GO
+ALTER TABLE [dbo].[Appointment_Cancellations] ADD  DEFAULT (sysdatetime()) FOR [cancellation_date]
+GO
+ALTER TABLE [dbo].[Appointments] ADD  DEFAULT ('Scheduled') FOR [status]
+GO
+ALTER TABLE [dbo].[Appointments] ADD  CONSTRAINT [DF_Appointments_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Appointments] ADD  CONSTRAINT [DF_Appointments_CreatedAt]  DEFAULT (sysdatetime()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[Appointments] ADD  CONSTRAINT [DF_Appointments_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Appointments] ADD  CONSTRAINT [DF_Appointments_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[Bed_Assignments] ADD  DEFAULT (sysdatetime()) FOR [assigned_at]
+GO
+ALTER TABLE [dbo].[Beds] ADD  DEFAULT ((1)) FOR [is_available]
+GO
+ALTER TABLE [dbo].[Change_Log] ADD  DEFAULT (sysdatetime()) FOR [change_date]
+GO
+ALTER TABLE [dbo].[Clinical_Audits] ADD  DEFAULT ('Open') FOR [status]
+GO
+ALTER TABLE [dbo].[Clinical_Notes] ADD  DEFAULT (sysdatetime()) FOR [note_date]
+GO
+ALTER TABLE [dbo].[Clinical_Notes] ADD  DEFAULT ((0)) FOR [is_sensitive]
+GO
+ALTER TABLE [dbo].[Departments] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[DepartmentTypes] ADD  DEFAULT ((0)) FOR [is_clinical]
+GO
+ALTER TABLE [dbo].[DepartmentTypes] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Diagnoses] ADD  DEFAULT ((0)) FOR [is_primary]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] ADD  DEFAULT ((0)) FOR [is_primary]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments] ADD  DEFAULT ((0)) FOR [is_primary]
+GO
+ALTER TABLE [dbo].[Doctors] ADD  CONSTRAINT [DF_Doctors_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Doctors] ADD  CONSTRAINT [DF_Doctors_CreatedAt]  DEFAULT (sysdatetime()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[Doctors] ADD  CONSTRAINT [DF_Doctors_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Doctors] ADD  CONSTRAINT [DF_Doctors_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[DoctorSpecialties] ADD  DEFAULT ((0)) FOR [is_primary]
+GO
+ALTER TABLE [dbo].[DoctorSpecialties] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] ADD  DEFAULT ('Scheduled') FOR [status]
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Hospitalizations] ADD  DEFAULT ('Active') FOR [status]
+GO
+ALTER TABLE [dbo].[Hospitalizations] ADD  CONSTRAINT [DF_Hospitalizations_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Hospitalizations] ADD  CONSTRAINT [DF_Hospitalizations_CreatedAt]  DEFAULT (sysdatetime()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[Hospitalizations] ADD  CONSTRAINT [DF_Hospitalizations_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Hospitalizations] ADD  CONSTRAINT [DF_Hospitalizations_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[Imaging_Orders] ADD  DEFAULT (sysdatetime()) FOR [order_date]
+GO
+ALTER TABLE [dbo].[Imaging_Orders] ADD  DEFAULT ('Ordered') FOR [status]
+GO
+ALTER TABLE [dbo].[Imaging_Results] ADD  DEFAULT (sysdatetime()) FOR [result_date]
+GO
+ALTER TABLE [dbo].[Incident_Reports] ADD  DEFAULT ('Open') FOR [status]
+GO
+ALTER TABLE [dbo].[Insurance_Providers] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[Invoice_Lines] ADD  DEFAULT ((1)) FOR [quantity]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  DEFAULT (sysdatetime()) FOR [invoice_date]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  DEFAULT ('Pending') FOR [status]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  CONSTRAINT [DF_Invoices_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  CONSTRAINT [DF_Invoices_CreatedAt]  DEFAULT (sysdatetime()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  CONSTRAINT [DF_Invoices_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Invoices] ADD  CONSTRAINT [DF_Invoices_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[Lab_Orders] ADD  DEFAULT (sysdatetime()) FOR [order_date]
+GO
+ALTER TABLE [dbo].[Lab_Orders] ADD  DEFAULT ('Ordered') FOR [status]
+GO
+ALTER TABLE [dbo].[Lab_Results] ADD  DEFAULT (sysdatetime()) FOR [result_date]
+GO
+ALTER TABLE [dbo].[Medical_Equipment] ADD  DEFAULT ('Operational') FOR [status]
+GO
+ALTER TABLE [dbo].[Medical_History] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Medical_Specialties] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Medical_Specialties] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[Medication_Administration] ADD  DEFAULT (sysdatetime()) FOR [administered_at]
+GO
+ALTER TABLE [dbo].[Medication_Inventory] ADD  DEFAULT (CONVERT([date],getdate())) FOR [received_date]
+GO
+ALTER TABLE [dbo].[Medications] ADD  DEFAULT ((0)) FOR [is_controlled_substance]
+GO
+ALTER TABLE [dbo].[Medications] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[Patient_Transfers] ADD  DEFAULT (sysdatetime()) FOR [transfer_date]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[PatientInsurance] ADD  DEFAULT ((0)) FOR [is_primary]
+GO
+ALTER TABLE [dbo].[PatientInsurance] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Patients] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Patients] ADD  CONSTRAINT [DF_Patients_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Patients] ADD  CONSTRAINT [DF_Patients_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Patients] ADD  CONSTRAINT [DF_Patients_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[Payments] ADD  DEFAULT (sysdatetime()) FOR [payment_date]
+GO
+ALTER TABLE [dbo].[Pharmacy_Suppliers] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[Prescriptions] ADD  CONSTRAINT [DF_Prescriptions_StatusID]  DEFAULT ((1)) FOR [StatusID]
+GO
+ALTER TABLE [dbo].[Prescriptions] ADD  CONSTRAINT [DF_Prescriptions_CreatedAt]  DEFAULT (sysdatetime()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[Prescriptions] ADD  CONSTRAINT [DF_Prescriptions_CreatedBy]  DEFAULT ([dbo].[GetCurrentUserId]()) FOR [CreatedBy]
+GO
+ALTER TABLE [dbo].[Prescriptions] ADD  CONSTRAINT [DF_Prescriptions_Synced]  DEFAULT ((0)) FOR [Synced]
+GO
+ALTER TABLE [dbo].[RecordStatus] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[RecordStatus] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[ShiftAssignments] ADD  DEFAULT ((0)) FOR [is_approved]
+GO
+ALTER TABLE [dbo].[ShiftAssignments] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Suppliers] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[System_Users] ADD  DEFAULT (sysdatetime()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[System_Users] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[Vital_Signs] ADD  DEFAULT (sysdatetime()) FOR [record_time]
+GO
+ALTER TABLE [dbo].[Wards] ADD  DEFAULT ((1)) FOR [is_active]
+GO
+ALTER TABLE [dbo].[AccessLevels]  WITH CHECK ADD  CONSTRAINT [FK_AccessLevels_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[AccessLevels] CHECK CONSTRAINT [FK_AccessLevels_CreatedBy]
+GO
+ALTER TABLE [dbo].[Admin_Staff]  WITH CHECK ADD FOREIGN KEY([user_id])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Allergies]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Allergies]  WITH CHECK ADD FOREIGN KEY([recorded_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Appointment_Cancellations]  WITH CHECK ADD FOREIGN KEY([appointment_id])
+REFERENCES [dbo].[Appointments] ([appointment_id])
+GO
+ALTER TABLE [dbo].[Appointment_Cancellations]  WITH CHECK ADD FOREIGN KEY([canceled_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD FOREIGN KEY([appointment_type_id])
+REFERENCES [dbo].[Appointment_Types] ([appointment_type_id])
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD  CONSTRAINT [FK_Appointments_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Appointments] CHECK CONSTRAINT [FK_Appointments_CreatedBy]
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD  CONSTRAINT [FK_Appointments_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Appointments] CHECK CONSTRAINT [FK_Appointments_Doctors]
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD  CONSTRAINT [FK_Appointments_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Appointments] CHECK CONSTRAINT [FK_Appointments_Patients]
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD  CONSTRAINT [FK_Appointments_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Appointments] CHECK CONSTRAINT [FK_Appointments_Status]
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD  CONSTRAINT [FK_Appointments_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Appointments] CHECK CONSTRAINT [FK_Appointments_UpdatedBy]
+GO
+ALTER TABLE [dbo].[Bed_Assignments]  WITH CHECK ADD FOREIGN KEY([assigned_by])
+REFERENCES [dbo].[Admin_Staff] ([staff_id])
+GO
+ALTER TABLE [dbo].[Bed_Assignments]  WITH CHECK ADD FOREIGN KEY([bed_id])
+REFERENCES [dbo].[Beds] ([bed_id])
+GO
+ALTER TABLE [dbo].[Bed_Assignments]  WITH CHECK ADD FOREIGN KEY([hospitalization_id])
+REFERENCES [dbo].[Hospitalizations] ([hospitalization_id])
+GO
+ALTER TABLE [dbo].[Beds]  WITH CHECK ADD FOREIGN KEY([ward_id])
+REFERENCES [dbo].[Wards] ([ward_id])
+GO
+ALTER TABLE [dbo].[Change_Log]  WITH CHECK ADD FOREIGN KEY([changed_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Clinical_Audits]  WITH CHECK ADD FOREIGN KEY([auditor])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Clinical_Events]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Clinical_Events]  WITH CHECK ADD FOREIGN KEY([recorded_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Clinical_Notes]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Clinical_Notes]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Coverage_Details]  WITH CHECK ADD FOREIGN KEY([plan_id])
+REFERENCES [dbo].[Insurance_Plans] ([plan_id])
+GO
+ALTER TABLE [dbo].[Departments]  WITH CHECK ADD FOREIGN KEY([head_of_department])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Departments]  WITH CHECK ADD  CONSTRAINT [FK_Departments_DepartmentTypes] FOREIGN KEY([type_id])
+REFERENCES [dbo].[DepartmentTypes] ([type_id])
+GO
+ALTER TABLE [dbo].[Departments] CHECK CONSTRAINT [FK_Departments_DepartmentTypes]
+GO
+ALTER TABLE [dbo].[DepartmentTypes]  WITH CHECK ADD  CONSTRAINT [FK_DepartmentTypes_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[DepartmentTypes] CHECK CONSTRAINT [FK_DepartmentTypes_CreatedBy]
+GO
+ALTER TABLE [dbo].[Diagnoses]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Diagnoses]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Diagnoses]  WITH CHECK ADD  CONSTRAINT [FK_Diagnoses_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Diagnoses] CHECK CONSTRAINT [FK_Diagnoses_Doctors]
+GO
+ALTER TABLE [dbo].[Diagnoses]  WITH CHECK ADD  CONSTRAINT [FK_Diagnoses_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Diagnoses] CHECK CONSTRAINT [FK_Diagnoses_Patients]
+GO
+ALTER TABLE [dbo].[Discharges]  WITH CHECK ADD FOREIGN KEY([discharged_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Discharges]  WITH CHECK ADD FOREIGN KEY([hospitalization_id])
+REFERENCES [dbo].[Hospitalizations] ([hospitalization_id])
+GO
+ALTER TABLE [dbo].[Doctor_Schedules]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorDepartmentAssignments_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] CHECK CONSTRAINT [FK_DoctorDepartmentAssignments_CreatedBy]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorDepartmentAssignments_Departments] FOREIGN KEY([department_id])
+REFERENCES [dbo].[Departments] ([department_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] CHECK CONSTRAINT [FK_DoctorDepartmentAssignments_Departments]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorDepartmentAssignments_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] CHECK CONSTRAINT [FK_DoctorDepartmentAssignments_Doctors]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorDepartmentAssignments_Status] FOREIGN KEY([status_id])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] CHECK CONSTRAINT [FK_DoctorDepartmentAssignments_Status]
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorDepartmentAssignments_UpdatedBy] FOREIGN KEY([updated_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[DoctorDepartmentAssignments] CHECK CONSTRAINT [FK_DoctorDepartmentAssignments_UpdatedBy]
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorPatientAssignments_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments] CHECK CONSTRAINT [FK_DoctorPatientAssignments_Doctors]
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorPatientAssignments_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments] CHECK CONSTRAINT [FK_DoctorPatientAssignments_Patients]
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments]  WITH CHECK ADD  CONSTRAINT [FK_DoctorPatientAssignments_Status] FOREIGN KEY([status_id])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[DoctorPatientAssignments] CHECK CONSTRAINT [FK_DoctorPatientAssignments_Status]
+GO
+ALTER TABLE [dbo].[Doctors]  WITH NOCHECK ADD FOREIGN KEY([specialty_id])
+REFERENCES [dbo].[Medical_Specialties] ([specialty_id])
+GO
+ALTER TABLE [dbo].[Doctors]  WITH NOCHECK ADD FOREIGN KEY([user_id])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Doctors]  WITH NOCHECK ADD  CONSTRAINT [FK_Doctors_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Doctors] CHECK CONSTRAINT [FK_Doctors_CreatedBy]
+GO
+ALTER TABLE [dbo].[Doctors]  WITH NOCHECK ADD  CONSTRAINT [FK_Doctors_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Doctors] CHECK CONSTRAINT [FK_Doctors_Status]
+GO
+ALTER TABLE [dbo].[Doctors]  WITH NOCHECK ADD  CONSTRAINT [FK_Doctors_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Doctors] CHECK CONSTRAINT [FK_Doctors_UpdatedBy]
+GO
+ALTER TABLE [dbo].[DoctorSpecialties]  WITH CHECK ADD  CONSTRAINT [FK_DoctorSpecialties_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[DoctorSpecialties] CHECK CONSTRAINT [FK_DoctorSpecialties_CreatedBy]
+GO
+ALTER TABLE [dbo].[DoctorSpecialties]  WITH CHECK ADD  CONSTRAINT [FK_DoctorSpecialties_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[DoctorSpecialties] CHECK CONSTRAINT [FK_DoctorSpecialties_Doctors]
+GO
+ALTER TABLE [dbo].[DoctorSpecialties]  WITH CHECK ADD  CONSTRAINT [FK_DoctorSpecialties_Specialties] FOREIGN KEY([specialty_id])
+REFERENCES [dbo].[Medical_Specialties] ([specialty_id])
+GO
+ALTER TABLE [dbo].[DoctorSpecialties] CHECK CONSTRAINT [FK_DoctorSpecialties_Specialties]
+GO
+ALTER TABLE [dbo].[Equipment_Maintenance]  WITH CHECK ADD FOREIGN KEY([equipment_id])
+REFERENCES [dbo].[Medical_Equipment] ([equipment_id])
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule]  WITH CHECK ADD  CONSTRAINT [FK_EquipmentMaintenanceSchedule_AssignedTo] FOREIGN KEY([assigned_to])
+REFERENCES [dbo].[Admin_Staff] ([staff_id])
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] CHECK CONSTRAINT [FK_EquipmentMaintenanceSchedule_AssignedTo]
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule]  WITH CHECK ADD  CONSTRAINT [FK_EquipmentMaintenanceSchedule_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] CHECK CONSTRAINT [FK_EquipmentMaintenanceSchedule_CreatedBy]
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule]  WITH CHECK ADD  CONSTRAINT [FK_EquipmentMaintenanceSchedule_Equipment] FOREIGN KEY([equipment_id])
+REFERENCES [dbo].[Medical_Equipment] ([equipment_id])
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] CHECK CONSTRAINT [FK_EquipmentMaintenanceSchedule_Equipment]
+GO
+ALTER TABLE [dbo].[Family_History]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD FOREIGN KEY([admitting_doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD FOREIGN KEY([ward_id])
+REFERENCES [dbo].[Wards] ([ward_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD  CONSTRAINT [FK_Hospitalizations_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations] CHECK CONSTRAINT [FK_Hospitalizations_CreatedBy]
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD  CONSTRAINT [FK_Hospitalizations_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations] CHECK CONSTRAINT [FK_Hospitalizations_Status]
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD  CONSTRAINT [FK_Hospitalizations_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Hospitalizations] CHECK CONSTRAINT [FK_Hospitalizations_UpdatedBy]
+GO
+ALTER TABLE [dbo].[Imaging_Orders]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Imaging_Orders]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Imaging_Results]  WITH CHECK ADD FOREIGN KEY([imaging_order_id])
+REFERENCES [dbo].[Imaging_Orders] ([imaging_order_id])
+GO
+ALTER TABLE [dbo].[Imaging_Results]  WITH CHECK ADD FOREIGN KEY([radiologist_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Incident_Reports]  WITH CHECK ADD FOREIGN KEY([reported_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Incident_Reports]  WITH CHECK ADD FOREIGN KEY([resolved_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Informed_Consents]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Informed_Consents]  WITH CHECK ADD FOREIGN KEY([signed_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Insurance_Plans]  WITH CHECK ADD FOREIGN KEY([provider_id])
+REFERENCES [dbo].[Insurance_Providers] ([provider_id])
+GO
+ALTER TABLE [dbo].[Invoice_Lines]  WITH CHECK ADD FOREIGN KEY([invoice_id])
+REFERENCES [dbo].[Invoices] ([invoice_id])
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD FOREIGN KEY([insurance_plan_id])
+REFERENCES [dbo].[Insurance_Plans] ([plan_id])
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD  CONSTRAINT [FK_Invoices_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Invoices] CHECK CONSTRAINT [FK_Invoices_CreatedBy]
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD  CONSTRAINT [FK_Invoices_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Invoices] CHECK CONSTRAINT [FK_Invoices_Status]
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD  CONSTRAINT [FK_Invoices_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Invoices] CHECK CONSTRAINT [FK_Invoices_UpdatedBy]
+GO
+ALTER TABLE [dbo].[Lab_Orders]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Lab_Orders]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Lab_Results]  WITH CHECK ADD FOREIGN KEY([lab_order_id])
+REFERENCES [dbo].[Lab_Orders] ([lab_order_id])
+GO
+ALTER TABLE [dbo].[Lab_Results]  WITH CHECK ADD FOREIGN KEY([reviewed_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Medical_Equipment]  WITH CHECK ADD FOREIGN KEY([department_id])
+REFERENCES [dbo].[Departments] ([department_id])
+GO
+ALTER TABLE [dbo].[Medical_History]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Medical_History]  WITH CHECK ADD FOREIGN KEY([recorded_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Medical_Specialties]  WITH CHECK ADD FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Medication_Administration]  WITH CHECK ADD FOREIGN KEY([medication_id])
+REFERENCES [dbo].[Medications] ([medication_id])
+GO
+ALTER TABLE [dbo].[Medication_Administration]  WITH CHECK ADD FOREIGN KEY([nurse_id])
+REFERENCES [dbo].[Nurses] ([nurse_id])
+GO
+ALTER TABLE [dbo].[Medication_Administration]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Medication_Inventory]  WITH CHECK ADD FOREIGN KEY([medication_id])
+REFERENCES [dbo].[Medications] ([medication_id])
+GO
+ALTER TABLE [dbo].[Medication_Inventory]  WITH CHECK ADD FOREIGN KEY([supplier_id])
+REFERENCES [dbo].[Pharmacy_Suppliers] ([supplier_id])
+GO
+ALTER TABLE [dbo].[MedicationTreatments]  WITH CHECK ADD  CONSTRAINT [FK_MedicationTreatments_Diagnoses] FOREIGN KEY([diagnosis_id])
+REFERENCES [dbo].[Diagnoses] ([diagnosis_id])
+GO
+ALTER TABLE [dbo].[MedicationTreatments] CHECK CONSTRAINT [FK_MedicationTreatments_Diagnoses]
+GO
+ALTER TABLE [dbo].[MedicationTreatments]  WITH CHECK ADD  CONSTRAINT [FK_MedicationTreatments_Medications] FOREIGN KEY([medication_id])
+REFERENCES [dbo].[Medications] ([medication_id])
+GO
+ALTER TABLE [dbo].[MedicationTreatments] CHECK CONSTRAINT [FK_MedicationTreatments_Medications]
+GO
+ALTER TABLE [dbo].[MedicationTreatments]  WITH CHECK ADD  CONSTRAINT [FK_MedicationTreatments_Prescriptions] FOREIGN KEY([prescription_id])
+REFERENCES [dbo].[Prescriptions] ([prescription_id])
+GO
+ALTER TABLE [dbo].[MedicationTreatments] CHECK CONSTRAINT [FK_MedicationTreatments_Prescriptions]
+GO
+ALTER TABLE [dbo].[MedicationTreatments]  WITH CHECK ADD  CONSTRAINT [FK_MedicationTreatments_Status] FOREIGN KEY([status_id])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[MedicationTreatments] CHECK CONSTRAINT [FK_MedicationTreatments_Status]
+GO
+ALTER TABLE [dbo].[Nurses]  WITH CHECK ADD FOREIGN KEY([user_id])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Patient_Transfers]  WITH CHECK ADD FOREIGN KEY([approved_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Patient_Transfers]  WITH CHECK ADD FOREIGN KEY([from_ward_id])
+REFERENCES [dbo].[Wards] ([ward_id])
+GO
+ALTER TABLE [dbo].[Patient_Transfers]  WITH CHECK ADD FOREIGN KEY([hospitalization_id])
+REFERENCES [dbo].[Hospitalizations] ([hospitalization_id])
+GO
+ALTER TABLE [dbo].[Patient_Transfers]  WITH CHECK ADD FOREIGN KEY([to_ward_id])
+REFERENCES [dbo].[Wards] ([ward_id])
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity]  WITH CHECK ADD  CONSTRAINT [FK_PatientAllergySeverity_Allergies] FOREIGN KEY([allergy_id])
+REFERENCES [dbo].[Allergies] ([allergy_id])
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] CHECK CONSTRAINT [FK_PatientAllergySeverity_Allergies]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity]  WITH CHECK ADD  CONSTRAINT [FK_PatientAllergySeverity_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] CHECK CONSTRAINT [FK_PatientAllergySeverity_CreatedBy]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity]  WITH CHECK ADD  CONSTRAINT [FK_PatientAllergySeverity_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] CHECK CONSTRAINT [FK_PatientAllergySeverity_Patients]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity]  WITH CHECK ADD  CONSTRAINT [FK_PatientAllergySeverity_VerifiedBy] FOREIGN KEY([verified_by])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] CHECK CONSTRAINT [FK_PatientAllergySeverity_VerifiedBy]
+GO
+ALTER TABLE [dbo].[PatientInsurance]  WITH CHECK ADD  CONSTRAINT [FK_PatientInsurance_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[PatientInsurance] CHECK CONSTRAINT [FK_PatientInsurance_CreatedBy]
+GO
+ALTER TABLE [dbo].[PatientInsurance]  WITH CHECK ADD  CONSTRAINT [FK_PatientInsurance_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[PatientInsurance] CHECK CONSTRAINT [FK_PatientInsurance_Patients]
+GO
+ALTER TABLE [dbo].[PatientInsurance]  WITH CHECK ADD  CONSTRAINT [FK_PatientInsurance_Plans] FOREIGN KEY([plan_id])
+REFERENCES [dbo].[Insurance_Plans] ([plan_id])
+GO
+ALTER TABLE [dbo].[PatientInsurance] CHECK CONSTRAINT [FK_PatientInsurance_Plans]
+GO
+ALTER TABLE [dbo].[Patients]  WITH CHECK ADD  CONSTRAINT [FK_Patients_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Patients] CHECK CONSTRAINT [FK_Patients_CreatedBy]
+GO
+ALTER TABLE [dbo].[Patients]  WITH CHECK ADD  CONSTRAINT [FK_Patients_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Patients] CHECK CONSTRAINT [FK_Patients_Status]
+GO
+ALTER TABLE [dbo].[Patients]  WITH CHECK ADD  CONSTRAINT [FK_Patients_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Patients] CHECK CONSTRAINT [FK_Patients_UpdatedBy]
+GO
+ALTER TABLE [dbo].[Payments]  WITH CHECK ADD FOREIGN KEY([invoice_id])
+REFERENCES [dbo].[Invoices] ([invoice_id])
+GO
+ALTER TABLE [dbo].[Payments]  WITH CHECK ADD FOREIGN KEY([received_by])
+REFERENCES [dbo].[Admin_Staff] ([staff_id])
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_CreatedBy] FOREIGN KEY([CreatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_CreatedBy]
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_Doctors] FOREIGN KEY([doctor_id])
+REFERENCES [dbo].[Doctors] ([doctor_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_Doctors]
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_medicationid] FOREIGN KEY([medication_id])
+REFERENCES [dbo].[Medications] ([medication_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_medicationid]
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_Patients] FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_Patients]
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_Status] FOREIGN KEY([StatusID])
+REFERENCES [dbo].[RecordStatus] ([status_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_Status]
+GO
+ALTER TABLE [dbo].[Prescriptions]  WITH CHECK ADD  CONSTRAINT [FK_Prescriptions_UpdatedBy] FOREIGN KEY([UpdatedBy])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Prescriptions] CHECK CONSTRAINT [FK_Prescriptions_UpdatedBy]
+GO
+ALTER TABLE [dbo].[Purchases]  WITH CHECK ADD FOREIGN KEY([equipment_id])
+REFERENCES [dbo].[Medical_Equipment] ([equipment_id])
+GO
+ALTER TABLE [dbo].[Purchases]  WITH CHECK ADD FOREIGN KEY([received_by])
+REFERENCES [dbo].[Admin_Staff] ([staff_id])
+GO
+ALTER TABLE [dbo].[Purchases]  WITH CHECK ADD FOREIGN KEY([supplier_id])
+REFERENCES [dbo].[Suppliers] ([supplier_id])
+GO
+ALTER TABLE [dbo].[RecordStatus]  WITH CHECK ADD  CONSTRAINT [FK_RecordStatus_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[RecordStatus] CHECK CONSTRAINT [FK_RecordStatus_CreatedBy]
+GO
+ALTER TABLE [dbo].[ShiftAssignments]  WITH CHECK ADD  CONSTRAINT [FK_ShiftAssignments_ApprovedBy] FOREIGN KEY([approved_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[ShiftAssignments] CHECK CONSTRAINT [FK_ShiftAssignments_ApprovedBy]
+GO
+ALTER TABLE [dbo].[ShiftAssignments]  WITH CHECK ADD  CONSTRAINT [FK_ShiftAssignments_CreatedBy] FOREIGN KEY([created_by])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[ShiftAssignments] CHECK CONSTRAINT [FK_ShiftAssignments_CreatedBy]
+GO
+ALTER TABLE [dbo].[ShiftAssignments]  WITH CHECK ADD  CONSTRAINT [FK_ShiftAssignments_Shift] FOREIGN KEY([shift_id])
+REFERENCES [dbo].[Shifts] ([shift_id])
+GO
+ALTER TABLE [dbo].[ShiftAssignments] CHECK CONSTRAINT [FK_ShiftAssignments_Shift]
+GO
+ALTER TABLE [dbo].[ShiftAssignments]  WITH CHECK ADD  CONSTRAINT [FK_ShiftAssignments_Staff] FOREIGN KEY([staff_user_id])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[ShiftAssignments] CHECK CONSTRAINT [FK_ShiftAssignments_Staff]
+GO
+ALTER TABLE [dbo].[System_Users]  WITH NOCHECK ADD  CONSTRAINT [FK_SystemUsers_AccessLevels] FOREIGN KEY([access_level_id])
+REFERENCES [dbo].[AccessLevels] ([access_level_id])
+GO
+ALTER TABLE [dbo].[System_Users] CHECK CONSTRAINT [FK_SystemUsers_AccessLevels]
+GO
+ALTER TABLE [dbo].[Vaccinations]  WITH CHECK ADD FOREIGN KEY([administered_by])
+REFERENCES [dbo].[Nurses] ([nurse_id])
+GO
+ALTER TABLE [dbo].[Vaccinations]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Vital_Signs]  WITH CHECK ADD FOREIGN KEY([patient_id])
+REFERENCES [dbo].[Patients] ([patient_id])
+GO
+ALTER TABLE [dbo].[Vital_Signs]  WITH CHECK ADD FOREIGN KEY([recorded_by])
+REFERENCES [dbo].[Nurses] ([nurse_id])
+GO
+ALTER TABLE [dbo].[Work_Schedules]  WITH CHECK ADD FOREIGN KEY([shift_id])
+REFERENCES [dbo].[Shifts] ([shift_id])
+GO
+ALTER TABLE [dbo].[Work_Schedules]  WITH CHECK ADD FOREIGN KEY([staff_user_id])
+REFERENCES [dbo].[System_Users] ([user_id])
+GO
+ALTER TABLE [dbo].[Appointment_Types]  WITH CHECK ADD CHECK  (([duration_minutes]>(0)))
+GO
+ALTER TABLE [dbo].[Appointments]  WITH CHECK ADD CHECK  (([status]='No Show' OR [status]='Canceled' OR [status]='Completed' OR [status]='Scheduled'))
+GO
+ALTER TABLE [dbo].[Change_Log]  WITH CHECK ADD CHECK  (([change_type]='DELETE' OR [change_type]='UPDATE' OR [change_type]='INSERT'))
+GO
+ALTER TABLE [dbo].[Clinical_Audits]  WITH CHECK ADD CHECK  (([status]='Closed' OR [status]='In Progress' OR [status]='Open'))
+GO
+ALTER TABLE [dbo].[Coverage_Details]  WITH CHECK ADD CHECK  (([coverage_percentage]>=(0) AND [coverage_percentage]<=(100)))
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule]  WITH CHECK ADD  CONSTRAINT [CHK_Dates] CHECK  (([completed_date] IS NULL OR [completed_date]>=[schedule_date]))
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] CHECK CONSTRAINT [CHK_Dates]
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule]  WITH CHECK ADD  CONSTRAINT [CHK_Status] CHECK  (([status]='Cancelled' OR [status]='Completed' OR [status]='In Progress' OR [status]='Scheduled'))
+GO
+ALTER TABLE [dbo].[EquipmentMaintenanceSchedule] CHECK CONSTRAINT [CHK_Status]
+GO
+ALTER TABLE [dbo].[Hospitalizations]  WITH CHECK ADD CHECK  (([status]='Transferred' OR [status]='Discharged' OR [status]='Active'))
+GO
+ALTER TABLE [dbo].[Imaging_Orders]  WITH CHECK ADD CHECK  (([status]='Canceled' OR [status]='Completed' OR [status]='Scheduled' OR [status]='Ordered'))
+GO
+ALTER TABLE [dbo].[Incident_Reports]  WITH CHECK ADD CHECK  (([status]='Closed' OR [status]='Investigating' OR [status]='Open'))
+GO
+ALTER TABLE [dbo].[Invoice_Lines]  WITH CHECK ADD CHECK  (([quantity]>(0)))
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD CHECK  (([status]='Canceled' OR [status]='Partially Paid' OR [status]='Paid' OR [status]='Pending'))
+GO
+ALTER TABLE [dbo].[Invoices]  WITH CHECK ADD CHECK  (([total_amount]>=(0)))
+GO
+ALTER TABLE [dbo].[Lab_Orders]  WITH CHECK ADD CHECK  (([status]='Canceled' OR [status]='Completed' OR [status]='In Progress' OR [status]='Ordered'))
+GO
+ALTER TABLE [dbo].[Medical_Equipment]  WITH CHECK ADD CHECK  (([status]='Out of Service' OR [status]='Under Maintenance' OR [status]='Operational'))
+GO
+ALTER TABLE [dbo].[Medical_Specialties]  WITH CHECK ADD  CONSTRAINT [chk_specialty_name] CHECK  (([specialty_name] like '[A-Za-z ]%'))
+GO
+ALTER TABLE [dbo].[Medical_Specialties] CHECK CONSTRAINT [chk_specialty_name]
+GO
+ALTER TABLE [dbo].[Medication_Inventory]  WITH CHECK ADD CHECK  (([quantity_available]>=(0)))
+GO
+ALTER TABLE [dbo].[MedicationTreatments]  WITH CHECK ADD  CONSTRAINT [CHK_EffectivenessRating] CHECK  (([effectiveness_rating]>=(1) AND [effectiveness_rating]<=(5)))
+GO
+ALTER TABLE [dbo].[MedicationTreatments] CHECK CONSTRAINT [CHK_EffectivenessRating]
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity]  WITH CHECK ADD  CONSTRAINT [CHK_SeverityLevel] CHECK  (([severity_level]='Severe' OR [severity_level]='Moderate' OR [severity_level]='Mild'))
+GO
+ALTER TABLE [dbo].[PatientAllergySeverity] CHECK CONSTRAINT [CHK_SeverityLevel]
+GO
+ALTER TABLE [dbo].[Patients]  WITH CHECK ADD  CONSTRAINT [CHK_Patients_Gender] CHECK  (([gender]='O' OR [gender]='F' OR [gender]='M'))
+GO
+ALTER TABLE [dbo].[Patients] CHECK CONSTRAINT [CHK_Patients_Gender]
+GO
+ALTER TABLE [dbo].[Patients]  WITH CHECK ADD CHECK  (([gender]='O' OR [gender]='F' OR [gender]='M'))
+GO
+ALTER TABLE [dbo].[Payments]  WITH CHECK ADD CHECK  (([amount_paid]>=(0)))
+GO
+ALTER TABLE [dbo].[System_Users]  WITH NOCHECK ADD  CONSTRAINT [CK_SystemUsers_Role] CHECK  (([role]='AdminAssistant' OR [role]='Supervisor' OR [role]='Manager' OR [role]='Staff' OR [role]='Nurse' OR [role]='Doctor' OR [role]='Admin'))
+GO
+ALTER TABLE [dbo].[System_Users] CHECK CONSTRAINT [CK_SystemUsers_Role]
+GO
+
+-- =============================================
+-- Set database to read-write mode
+-- =============================================
+USE [master]
+GO
+ALTER DATABASE [OGH_HospitalSystem] SET READ_WRITE 
+GO
